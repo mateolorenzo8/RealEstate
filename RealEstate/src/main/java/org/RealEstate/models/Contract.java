@@ -6,6 +6,7 @@ import org.RealEstate.enums.Status;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Entity
@@ -39,6 +40,12 @@ public class Contract {
     List<Payment> payments;
 
     public Contract() {}
+
+    public BigDecimal getTotal() {
+        long months = ChronoUnit.MONTHS.between(startDate, endDate);
+
+        return BigDecimal.valueOf(months).multiply(this.monthlyRent);
+    }
 
     public long getId() {
         return id;

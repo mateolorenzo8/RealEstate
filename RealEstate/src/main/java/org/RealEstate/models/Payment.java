@@ -25,6 +25,12 @@ public class Payment {
 
     public Payment() {}
 
+    public Payment(Contract contract, LocalDate payDate, BigDecimal amount) {
+        this.contract = contract;
+        this.payDate = payDate;
+        this.amount = amount;
+    }
+
     public long getId() {
         return id;
     }

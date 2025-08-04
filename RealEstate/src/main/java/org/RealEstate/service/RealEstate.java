@@ -1,5 +1,20 @@
 package org.RealEstate.service;
 
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import org.RealEstate.enums.Status;
+import org.RealEstate.models.*;
+import org.RealEstate.dto.*;
+import org.RealEstate.utils.HibernateUtil;
+import org.hibernate.Session;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+
 public final class RealEstate {
     private static volatile RealEstate instance;
 
@@ -16,4 +31,97 @@ public final class RealEstate {
         return instance;
     }
 
+    public Payment makePayment(MakePaymentDTO dto) {
+        Contract contract;
+
+        try (Session session = HibernateUtil.getSession()) {
+            contract = session.get(Contract.class, dto.getContractId());
+
+            if (contract == null) throw new IllegalArgumentException("Not found contract with id: " + dto.getContractId());
+        }
+
+        if (contract.getStatus() == Status.COMPLETED) throw new RuntimeException("Contract paid fully");
+
+        Payment payment = new Payment(
+                contract,
+                LocalDate.now(),
+                dto.getAmount()
+        );
+
+        try (Session session = HibernateUtil.getSession()) {
+            session.beginTransaction();
+            session.persist(payment);
+            session.getTransaction().commit();
+        }
+
+        BigDecimal paid;
+
+        try (Session session = HibernateUtil.getSession()) {
+            CriteriaBuilder cb = session.getCriteriaBuilder();
+            CriteriaQuery<BigDecimal> cq = cb.createQuery(BigDecimal.class);
+            Root<Payment> root = cq.from(Payment.class);
+
+            cq.select(
+                    cb.sum(root.get("amount"))
+            ).where(
+                    cb.equal(root.get("contract").get("id"), dto.getContractId())
+            ).groupBy(
+                    root.get("contract").get("id")
+            );
+
+            paid = session.createQuery(cq).getSingleResult();
+        }
+
+        if (paid.compareTo(contract.getTotal()) >= 0) {
+            contract.setStatus(Status.COMPLETED);
+        }
+        else if (contract.getEndDate().isBefore(LocalDate.now())) {
+            contract.setStatus(Status.OVERDUE);
+        }
+
+        try (Session session = HibernateUtil.getSession()) {
+            session.beginTransaction();
+            session.merge(payment);
+            session.getTransaction().commit();
+        }
+
+        return payment;
+    }
+
+    public List<Contract> searchContractsWithFilters(FilterDTO dto) {
+        try (Session session = HibernateUtil.getSession()) {
+            CriteriaBuilder cb = session.getCriteriaBuilder();
+            CriteriaQuery<Contract> cq = cb.createQuery(Contract.class);
+            Root<Contract> root = cq.from(Contract.class);
+
+            List<Predicate> predicates = new ArrayList<>();
+
+            predicates.add(cb.equal(root.get("tenantName"), dto.getClientName()));
+
+            if (dto.getPropertyType() != null) predicates.add(cb.equal(root.get("propertyType"), dto.getPropertyType()));
+
+            if (dto.getFromDate() != null) {
+                if (dto.getToDate() != null) {
+                    predicates.add(cb.between(root.get("fromDate"), dto.getFromDate(), dto.getToDate()));
+                }
+                else {
+                    predicates.add(cb.greaterThanOrEqualTo(root.get("fromDate"), dto.getFromDate()));
+                }
+            }
+
+            if (dto.getFromAmount() != null) {
+                if (dto.getToAmount() != null) {
+                    predicates.add(cb.between(root.get("amount"), dto.getFromAmount(), dto.getToAmount()));
+                }
+                else {
+                    predicates.add(cb.greaterThanOrEqualTo(root.get("amount"), dto.getFromAmount()));
+                }
+            }
+
+            cq.where(predicates.toArray(new Predicate[predicates.size()]));
+            cq.orderBy(cb.desc(root.get("startDate")));
+
+            return session.createQuery(cq).getResultList();
+        }
+    }
 }
