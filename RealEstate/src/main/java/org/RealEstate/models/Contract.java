@@ -41,6 +41,15 @@ public class Contract {
 
     public Contract() {}
 
+    public Contract(String tenantName, PropertyType propertyType, BigDecimal monthlyRent, LocalDate startDate, LocalDate endDate, Status status) {
+        this.tenantName = tenantName;
+        this.propertyType = propertyType;
+        this.monthlyRent = monthlyRent;
+        this.startDate = startDate;
+        this.endDate = endDate;
+        this.status = status;
+    }
+
     public BigDecimal getTotal() {
         long months = ChronoUnit.MONTHS.between(startDate, endDate);
 

@@ -93,25 +93,25 @@ public final class RealEstate {
 
             List<Predicate> predicates = new ArrayList<>();
 
-            predicates.add(cb.equal(root.get("tenantName"), dto.getClientName()));
+            predicates.add(cb.like(root.get("tenantName"), "%" + dto.getClientName() + "%"));
 
             if (dto.getPropertyType() != null) predicates.add(cb.equal(root.get("propertyType"), dto.getPropertyType()));
 
             if (dto.getFromDate() != null) {
                 if (dto.getToDate() != null) {
-                    predicates.add(cb.between(root.get("fromDate"), dto.getFromDate(), dto.getToDate()));
+                    predicates.add(cb.between(root.get("startDate"), dto.getFromDate(), dto.getToDate()));
                 }
                 else {
-                    predicates.add(cb.greaterThanOrEqualTo(root.get("fromDate"), dto.getFromDate()));
+                    predicates.add(cb.greaterThanOrEqualTo(root.get("startDate"), dto.getFromDate()));
                 }
             }
 
             if (dto.getFromAmount() != null) {
                 if (dto.getToAmount() != null) {
-                    predicates.add(cb.between(root.get("amount"), dto.getFromAmount(), dto.getToAmount()));
+                    predicates.add(cb.between(root.get("monthlyRent"), dto.getFromAmount(), dto.getToAmount()));
                 }
                 else {
-                    predicates.add(cb.greaterThanOrEqualTo(root.get("amount"), dto.getFromAmount()));
+                    predicates.add(cb.greaterThanOrEqualTo(root.get("monthlyRent"), dto.getFromAmount()));
                 }
             }
 
@@ -130,12 +130,12 @@ public final class RealEstate {
 
             Expression<Integer> years = cb.diff(
                     cb.function("YEAR", Integer.class, root.get("endDate")),
-                    cb.function("YEAR", Integer.class, root.get("starDate"))
+                    cb.function("YEAR", Integer.class, root.get("startDate"))
             );
 
             Expression<Integer> months = cb.abs(cb.diff(
                     cb.function("MONTH", Integer.class, root.get("endDate")),
-                    cb.function("MONTH", Integer.class, root.get("starDate"))
+                    cb.function("MONTH", Integer.class, root.get("startDate"))
             ));
 
             Expression<Integer> totalMonths = cb.sum(
@@ -162,17 +162,16 @@ public final class RealEstate {
         try (Session session = HibernateUtil.getSession()) {
             CriteriaBuilder cb = session.getCriteriaBuilder();
             CriteriaQuery<UnfinishedContractSummaryDTO> cq = cb.createQuery(UnfinishedContractSummaryDTO.class);
-            Root<Contract> root = cq.from(Contract.class);
-            Join<Contract, Payment> join = root.join("payments");
+            Root<Payment> root = cq.from(Payment.class);
 
             Expression<Integer> years = cb.diff(
-                    cb.function("YEAR", Integer.class, root.get("endDate")),
-                    cb.function("YEAR", Integer.class, root.get("starDate"))
+                    cb.function("YEAR", Integer.class, root.get("contract").get("endDate")),
+                    cb.function("YEAR", Integer.class, root.get("contract").get("startDate"))
             );
 
             Expression<Integer> months = cb.abs(cb.diff(
-                    cb.function("MONTH", Integer.class, root.get("endDate")),
-                    cb.function("MONTH", Integer.class, root.get("starDate"))
+                    cb.function("MONTH", Integer.class, root.get("contract").get("endDate")),
+                    cb.function("MONTH", Integer.class, root.get("contract").get("startDate"))
             ));
 
             Expression<Integer> totalMonths = cb.sum(
@@ -181,13 +180,13 @@ public final class RealEstate {
             );
 
             cq.multiselect(
-                    root.get("id"),
-                    cb.prod(root.get("monthlyRent"), totalMonths),
-                    cb.sum(join.get("amount"))
+                    root.get("contract").get("id"),
+                    cb.prod(root.get("contract").get("monthlyRent"), totalMonths),
+                    cb.sum(root.get("amount"))
             ).where(
-                    cb.notEqual(root.get("status"), Status.COMPLETED)
+                    cb.notEqual(root.get("contract").get("status"), Status.COMPLETED)
             ).groupBy(
-                    root.get("id")
+                    root.get("contract").get("id")
             );
 
             return session.createQuery(cq).getResultList();
