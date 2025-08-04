@@ -1,9 +1,6 @@
 package org.RealEstate.service;
 
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.*;
 import org.RealEstate.enums.Status;
 import org.RealEstate.models.*;
 import org.RealEstate.dto.*;
@@ -120,6 +117,78 @@ public final class RealEstate {
 
             cq.where(predicates.toArray(new Predicate[predicates.size()]));
             cq.orderBy(cb.desc(root.get("startDate")));
+
+            return session.createQuery(cq).getResultList();
+        }
+    }
+
+    public List<FinishedContractSummaryDTO> getFinishedContractSummary(DateRangeDTO dto) {
+        try (Session session = HibernateUtil.getSession()) {
+            CriteriaBuilder cb = session.getCriteriaBuilder();
+            CriteriaQuery<FinishedContractSummaryDTO> cq = cb.createQuery(FinishedContractSummaryDTO.class);
+            Root<Contract> root = cq.from(Contract.class);
+
+            Expression<Integer> years = cb.diff(
+                    cb.function("YEAR", Integer.class, root.get("endDate")),
+                    cb.function("YEAR", Integer.class, root.get("starDate"))
+            );
+
+            Expression<Integer> months = cb.abs(cb.diff(
+                    cb.function("MONTH", Integer.class, root.get("endDate")),
+                    cb.function("MONTH", Integer.class, root.get("starDate"))
+            ));
+
+            Expression<Integer> totalMonths = cb.sum(
+                    cb.prod(years, cb.literal(12)),
+                    months
+            );
+
+            cq.multiselect(
+                    root.get("propertyType"),
+                    cb.count(root),
+                    cb.prod(root.get("monthlyRent"), totalMonths)
+            ).where(
+                    cb.equal(root.get("status"), Status.COMPLETED),
+                    cb.between(root.get("startDate"), dto.getFromDate(), dto.getToDate())
+            ).groupBy(
+                    root.get("id")
+            );
+
+            return session.createQuery(cq).getResultList();
+        }
+    }
+
+    public List<UnfinishedContractSummaryDTO> getUnfinishedContractSummary() {
+        try (Session session = HibernateUtil.getSession()) {
+            CriteriaBuilder cb = session.getCriteriaBuilder();
+            CriteriaQuery<UnfinishedContractSummaryDTO> cq = cb.createQuery(UnfinishedContractSummaryDTO.class);
+            Root<Contract> root = cq.from(Contract.class);
+            Join<Contract, Payment> join = root.join("payments");
+
+            Expression<Integer> years = cb.diff(
+                    cb.function("YEAR", Integer.class, root.get("endDate")),
+                    cb.function("YEAR", Integer.class, root.get("starDate"))
+            );
+
+            Expression<Integer> months = cb.abs(cb.diff(
+                    cb.function("MONTH", Integer.class, root.get("endDate")),
+                    cb.function("MONTH", Integer.class, root.get("starDate"))
+            ));
+
+            Expression<Integer> totalMonths = cb.sum(
+                    cb.prod(years, cb.literal(12)),
+                    months
+            );
+
+            cq.multiselect(
+                    root.get("id"),
+                    cb.prod(root.get("monthlyRent"), totalMonths),
+                    cb.sum(join.get("amount"))
+            ).where(
+                    cb.notEqual(root.get("status"), Status.COMPLETED)
+            ).groupBy(
+                    root.get("id")
+            );
 
             return session.createQuery(cq).getResultList();
         }
