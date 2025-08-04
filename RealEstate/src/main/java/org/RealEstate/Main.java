@@ -76,6 +76,8 @@ public class Main {
             dto.setPropertyType(PropertyType.valueOf(sc.next().toUpperCase()));
         }
 
+        sc.nextLine();
+
         System.out.print("Filter by dates? Y/N: ");
         option = sc.nextLine().toUpperCase();
         if (option.equals("Y")) {
@@ -96,6 +98,8 @@ public class Main {
             System.out.print("From: ");
             dto.setFromAmount(BigDecimal.valueOf(sc.nextDouble()));
 
+            sc.nextLine();
+
             System.out.print("To? Y/N: ");
             option = sc.nextLine().toUpperCase();
             if (option.equals("Y")) {
@@ -110,6 +114,7 @@ public class Main {
             System.out.println("Total: " + contract.getTotal());
             System.out.println("Start: " + contract.getStartDate());
             System.out.println("End: " + contract.getEndDate());
+            System.out.println("");
         }
     }
 
