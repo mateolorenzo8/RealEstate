@@ -1,0 +1,53 @@
+plugins {
+    id 'java'
+    id 'jacoco'
+}
+
+group = 'org.Fintech'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+jacoco {
+    toolVersion = "0.8.10"
+}
+
+tasks.jacocoTestReport {
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+dependencies {
+    // Hibernate
+    implementation 'org.hibernate.orm:hibernate-core:6.6.7.Final'
+
+    implementation 'com.h2database:h2:2.2.224'
+    // MySQL Connector
+    implementation 'mysql:mysql-connector-java:8.0.33'
+
+    // JPA
+    implementation 'jakarta.persistence:jakarta.persistence-api:3.1.0'
+
+    // Logging
+    implementation 'org.slf4j:slf4j-api:2.0.9'
+    implementation 'ch.qos.logback:logback-classic:1.4.11'
+
+    testImplementation platform('org.junit:junit-bom:5.9.1')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+test {
+    useJUnitPlatform()
+    jacoco {
+        destinationFile = file("$buildDir/jacoco/test.exec")
+    }
+}
