@@ -9,7 +9,9 @@ import org.hibernate.Session;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 public final class RealEstate {
@@ -159,29 +161,18 @@ public final class RealEstate {
     }
 
     public List<UnfinishedContractSummaryDTO> getUnfinishedContractSummary() {
+        List<Object[]> query = new ArrayList<>();
+
         try (Session session = HibernateUtil.getSession()) {
             CriteriaBuilder cb = session.getCriteriaBuilder();
-            CriteriaQuery<UnfinishedContractSummaryDTO> cq = cb.createQuery(UnfinishedContractSummaryDTO.class);
+            CriteriaQuery<Object[]> cq = cb.createQuery(Object[].class);
             Root<Payment> root = cq.from(Payment.class);
-
-            Expression<Integer> years = cb.diff(
-                    cb.function("YEAR", Integer.class, root.get("contract").get("endDate")),
-                    cb.function("YEAR", Integer.class, root.get("contract").get("startDate"))
-            );
-
-            Expression<Integer> months = cb.abs(cb.diff(
-                    cb.function("MONTH", Integer.class, root.get("contract").get("endDate")),
-                    cb.function("MONTH", Integer.class, root.get("contract").get("startDate"))
-            ));
-
-            Expression<Integer> totalMonths = cb.sum(
-                    cb.prod(years, cb.literal(12)),
-                    months
-            );
 
             cq.multiselect(
                     root.get("contract").get("id"),
-                    cb.prod(root.get("contract").get("monthlyRent"), totalMonths),
+                    root.get("contract").get("monthlyRent"),
+                    root.get("contract").get("startDate"),
+                    root.get("contract").get("endDate"),
                     cb.sum(root.get("amount"))
             ).where(
                     cb.notEqual(root.get("contract").get("status"), Status.COMPLETED)
@@ -189,7 +180,24 @@ public final class RealEstate {
                     root.get("contract").get("id")
             );
 
-            return session.createQuery(cq).getResultList();
+            query = session.createQuery(cq).getResultList();
         }
+
+        List<UnfinishedContractSummaryDTO> dto = new ArrayList<>();
+
+        for (Object[] obj : query) {
+            LocalDate from = (LocalDate) obj[2];
+            LocalDate to = (LocalDate) obj[3];
+            BigDecimal monthlyRent = (BigDecimal) obj[1];
+            BigDecimal totalMonths = new BigDecimal(ChronoUnit.MONTHS.between(from, to));
+
+            dto.add(new  UnfinishedContractSummaryDTO(
+                    (long) obj[0],
+                    monthlyRent.multiply(totalMonths),
+                    (BigDecimal) obj[4]
+            ));
+        }
+
+        return dto;
     }
 }
