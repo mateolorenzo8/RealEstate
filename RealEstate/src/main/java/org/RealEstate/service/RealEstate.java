@@ -1,6 +1,7 @@
 package org.RealEstate.service;
 
 import jakarta.persistence.criteria.*;
+import org.RealEstate.enums.PropertyType;
 import org.RealEstate.enums.Status;
 import org.RealEstate.models.*;
 import org.RealEstate.dto.*;
@@ -9,6 +10,7 @@ import org.hibernate.Session;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Date;
@@ -125,30 +127,19 @@ public final class RealEstate {
     }
 
     public List<FinishedContractSummaryDTO> getFinishedContractSummary(DateRangeDTO dto) {
+        List<Object[]> queryResult = new ArrayList<>();
+
         try (Session session = HibernateUtil.getSession()) {
             CriteriaBuilder cb = session.getCriteriaBuilder();
-            CriteriaQuery<FinishedContractSummaryDTO> cq = cb.createQuery(FinishedContractSummaryDTO.class);
+            CriteriaQuery<Object[]> cq = cb.createQuery(Object[].class);
             Root<Contract> root = cq.from(Contract.class);
-
-            Expression<Integer> years = cb.diff(
-                    cb.function("YEAR", Integer.class, root.get("endDate")),
-                    cb.function("YEAR", Integer.class, root.get("startDate"))
-            );
-
-            Expression<Integer> months = cb.abs(cb.diff(
-                    cb.function("MONTH", Integer.class, root.get("endDate")),
-                    cb.function("MONTH", Integer.class, root.get("startDate"))
-            ));
-
-            Expression<Integer> totalMonths = cb.sum(
-                    cb.prod(years, cb.literal(12)),
-                    months
-            );
 
             cq.multiselect(
                     root.get("propertyType"),
                     cb.count(root),
-                    cb.prod(root.get("monthlyRent"), totalMonths)
+                    root.get("monthlyRent"),
+                    root.get("startDate"),
+                    root.get("endDate")
             ).where(
                     cb.equal(root.get("status"), Status.COMPLETED),
                     cb.between(root.get("startDate"), dto.getFromDate(), dto.getToDate())
@@ -156,8 +147,26 @@ public final class RealEstate {
                     root.get("id")
             );
 
-            return session.createQuery(cq).getResultList();
+            queryResult = session.createQuery(cq).getResultList();
         }
+
+        List<FinishedContractSummaryDTO> result = new ArrayList<>();
+
+        for (Object[] object : queryResult) {
+            BigDecimal monthlyRent = (BigDecimal) object[2];
+            LocalDate from = (LocalDate) object[3];
+            LocalDate to = (LocalDate) object[4];
+
+            BigDecimal months = new BigDecimal(ChronoUnit.MONTHS.between(from, to));
+
+            result.add(new FinishedContractSummaryDTO(
+                    (PropertyType) object[0],
+                    (long) object[1],
+                    monthlyRent.multiply(months)
+            ));
+        }
+
+        return result;
     }
 
     public List<UnfinishedContractSummaryDTO> getUnfinishedContractSummary() {
